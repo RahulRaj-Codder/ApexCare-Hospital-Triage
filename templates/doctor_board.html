@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Roster & Availability Board | ApexCare Health</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
+
+    <!-- Top Navigation Bar (Pure HTML - No Jinja) -->
+    <header class="bg-slate-900 text-white shadow-md border-b border-slate-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Brand & Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                        <i class="fa-solid fa-heart-pulse text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-lg tracking-tight text-white">ApexCare Flow</span>
+                            <span class="text-[10px] font-semibold bg-sky-950 text-sky-400 border border-sky-700/60 rounded px-1.5 py-0.5">GEC 2026</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-tight">Doctor Roster & Availability Board</p>
+                    </div>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="hidden md:flex items-center space-x-1 text-sm font-medium">
+                    <a href="/" class="px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">Dashboard</a>
+                    <a href="/triage" class="px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">Triage Station</a>
+                    <a href="/queue" class="px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">Live Queue</a>
+                    <a href="/doctor" class="px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">Doctor Room</a>
+                    <a href="/doctor_board.html" class="px-3 py-2 rounded-lg bg-slate-800 text-sky-400 transition font-bold">Doctor Board</a>
+                    <a href="/display" target="_blank" class="px-3 py-2 rounded-lg text-amber-300 hover:bg-slate-800 transition">TV Board</a>
+                </nav>
+
+                <!-- Status & Refresh -->
+                <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-emerald-400 text-xs border border-slate-700 font-bold">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span id="live-indicator">LIVE SYNC</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Overview Header -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-black text-slate-800 tracking-tight flex items-center space-x-2">
+                    <i class="fa-solid fa-user-doctor text-sky-600"></i>
+                    <span>Specialist Doctor & Room Availability Matrix</span>
+                </h1>
+                <p class="text-xs text-slate-500 mt-1">
+                    Multi-department specialist roster, live room occupancy, duty statuses, and patient examination tracking.
+                </p>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <span id="doctor-summary-pill" class="px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-800 border border-sky-200">
+                    Loading doctors...
+                </span>
+                <button onclick="fetchDoctorRoster()" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-slate-600">Filter Status:</span>
+                <button onclick="setFilter('ALL')" id="filter-all" class="filter-btn px-3 py-1 rounded-lg bg-slate-900 text-white font-bold">All</button>
+                <button onclick="setFilter('AVAILABLE')" id="filter-available" class="filter-btn px-3 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200">Available</button>
+                <button onclick="setFilter('BUSY')" id="filter-busy" class="filter-btn px-3 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200">In Consult</button>
+                <button onclick="setFilter('ON_BREAK')" id="filter-break" class="filter-btn px-3 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200">On Break</button>
+            </div>
+            <div class="text-slate-400 text-[11px]" id="last-updated-text">Auto-refreshing every 5s</div>
+        </div>
+
+        <!-- Doctor Cards Matrix Container -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="doctors-container">
+            <div class="col-span-3 py-16 text-center text-slate-400 text-xs">
+                <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-sky-500"></i>
+                <div>Loading live doctor roster...</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+        ApexCare Doctor Roster Board • GEC Hackathon 2026 Problem Statement 01
+    </footer>
+
+    <!-- Pure JavaScript (Zero Jinja) -->
+    <script>
+        let allDoctors = [];
+        let currentFilter = 'ALL';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchDoctorRoster();
+            setInterval(fetchDoctorRoster, 5000);
+            initSSE();
+        });
+
+        async function fetchDoctorRoster() {
+            try {
+                const response = await fetch('/api/doctors');
+                const data = await response.json();
+                if (data.success) {
+                    allDoctors = data.doctors || [];
+                    renderCards();
+                    updateSummary();
+                    document.getElementById('last-updated-text').innerText = 'Last updated: ' + new Date().toLocaleTimeString();
+                }
+            } catch (err) {
+                console.error("Failed to load doctor roster:", err);
+            }
+        }
+
+        function setFilter(status) {
+            currentFilter = status;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.className = 'filter-btn px-3 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200';
+            });
+            const activeId = status === 'ALL' ? 'filter-all' : (status === 'AVAILABLE' ? 'filter-available' : (status === 'BUSY' ? 'filter-busy' : 'filter-break'));
+            const activeBtn = document.getElementById(activeId);
+            if (activeBtn) {
+                activeBtn.className = 'filter-btn px-3 py-1 rounded-lg bg-slate-900 text-white font-bold';
+            }
+            renderCards();
+        }
+
+        function updateSummary() {
+            const available = allDoctors.filter(d => d.status === 'AVAILABLE').length;
+            const inConsult = allDoctors.filter(d => d.status === 'BUSY').length;
+            document.getElementById('doctor-summary-pill').innerText = 
+                `${available} Available • ${inConsult} In Consultation • Total: ${allDoctors.length}`;
+        }
+
+        function renderCards() {
+            const container = document.getElementById('doctors-container');
+            let list = allDoctors;
+            if (currentFilter !== 'ALL') {
+                list = allDoctors.filter(d => d.status === currentFilter);
+            }
+
+            if (!list || list.length === 0) {
+                container.innerHTML = '<div class="col-span-3 py-16 text-center text-slate-400 text-xs">No doctors match this filter.</div>';
+                return;
+            }
+
+            let html = '';
+            list.forEach(doc => {
+                let badge = '';
+                let cardBorder = 'border-slate-200';
+                let cardBg = 'bg-white';
+
+                if (doc.status === 'AVAILABLE') {
+                    badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center space-x-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span>AVAILABLE</span>
+                    </span>`;
+                } else if (doc.status === 'BUSY') {
+                    badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-100 text-sky-800 border border-sky-300 flex items-center space-x-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
+                        <span>IN CONSULTATION</span>
+                    </span>`;
+                    cardBorder = 'border-sky-300';
+                    cardBg = 'bg-sky-50/25';
+                } else if (doc.status === 'ON_BREAK') {
+                    badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                        ON BREAK
+                    </span>`;
+                } else {
+                    badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                        OFF DUTY
+                    </span>`;
+                }
+
+                let patientSection = '';
+                if (doc.active_token) {
+                    patientSection = `
+                        <div class="mt-3.5 p-3 rounded-xl bg-sky-50 border border-sky-200">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-sky-700 flex items-center justify-between">
+                                <span>Examining Patient</span>
+                                <span class="font-mono bg-sky-200/70 text-sky-900 px-1.5 py-0.2 rounded font-bold">${doc.active_token}</span>
+                            </div>
+                            <div class="font-bold text-xs text-slate-800 mt-1">
+                                ${doc.active_patient_name || 'Patient'}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    patientSection = `
+                        <div class="mt-3.5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-400 text-xs text-center">
+                            No patient currently in room
+                        </div>
+                    `;
+                }
+
+                html += `
+                <div class="${cardBg} rounded-2xl shadow-sm border ${cardBorder} p-5 flex flex-col justify-between transition hover:shadow-md">
+                    <div>
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shadow-xs">
+                                    ${doc.name.substring(0, 2)}
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-sm text-slate-900">${doc.name}</h3>
+                                    <p class="text-[11px] text-slate-500 font-medium">${doc.specialization}</p>
+                                </div>
+                            </div>
+                            <div>${badge}</div>
+                        </div>
+
+                        <div class="mt-3 flex items-center space-x-2 text-xs">
+                            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">${doc.dept_name}</span>
+                            <span class="px-2 py-0.5 rounded bg-sky-50 text-sky-800 font-bold text-[10px] border border-sky-200">
+                                <i class="fa-solid fa-door-open mr-0.5"></i> Room ${doc.room_no}
+                            </span>
+                        </div>
+
+                        ${patientSection}
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <select onchange="updateDutyStatus(${doc.id}, this.value)" class="text-[11px] font-semibold px-2.5 py-1 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-sky-500">
+                            <option value="AVAILABLE" ${doc.status === 'AVAILABLE' ? 'selected' : ''}>Available</option>
+                            <option value="ON_BREAK" ${doc.status === 'ON_BREAK' ? 'selected' : ''}>On Break</option>
+                            <option value="OFF_DUTY" ${doc.status === 'OFF_DUTY' ? 'selected' : ''}>Off Duty</option>
+                        </select>
+
+                        <a href="/doctor" class="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] transition flex items-center space-x-1">
+                            <span>Doctor Room</span>
+                            <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                        </a>
+                    </div>
+                </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function updateDutyStatus(doctorId, newStatus) {
+            try {
+                const res = await fetch('/api/doctors/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ doctor_id: doctorId, status: newStatus })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    fetchDoctorRoster();
+                } else {
+                    alert(data.error || "Update failed");
+                }
+            } catch (err) {
+                alert("Error: " + err.message);
+            }
+        }
+
+        function initSSE() {
+            if (!window.EventSource) return;
+            const source = new EventSource('/api/events/stream');
+            source.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'DOCTOR_AVAILABLE' || data.type === 'PATIENT_CALLED' || data.type === 'VISIT_COMPLETED') {
+                        fetchDoctorRoster();
+                    }
+                } catch (e) {}
+            };
+        }
+    </script>
+</body>
+</html>

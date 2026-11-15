@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Hospital Queue Management{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Queue Header & Filters -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-black text-slate-800 tracking-tight flex items-center space-x-2">
+                    <i class="fa-solid fa-list-ol text-sky-600"></i>
+                    <span>Hospital Urgency Queue & Doctor Allocation</span>
+                </h1>
+                <p class="text-xs text-slate-500 mt-1">
+                    Live dynamic ranking: CRITICAL cases prioritize ahead of URGENT and ROUTINE cases automatically.
+                </p>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Department Selector -->
+                <select id="filter-dept" onchange="fetchQueue()" class="text-xs px-3 py-2 border border-slate-200 rounded-xl bg-white font-medium focus:ring-2 focus:ring-sky-500">
+                    <option value="">All Departments</option>
+                    {% for dep in departments %}
+                    <option value="{{ dep.id }}">{{ dep.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <!-- Priority Filter -->
+                <select id="filter-priority" onchange="filterQueueLocal()" class="text-xs px-3 py-2 border border-slate-200 rounded-xl bg-white font-medium focus:ring-2 focus:ring-sky-500">
+                    <option value="ALL">All Urgencies</option>
+                    <option value="CRITICAL">Critical (P1)</option>
+                    <option value="URGENT">Urgent (P2)</option>
+                    <option value="ROUTINE">Routine (P3)</option>
+                </select>
+
+                <button onclick="fetchQueue()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">
+                    <i class="fa-solid fa-arrows-rotate mr-1"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Queue Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100 uppercase tracking-wider text-[10px]">
+                    <tr>
+                        <th class="py-3 px-4">Rank / Token</th>
+                        <th class="py-3 px-4">Patient Profile</th>
+                        <th class="py-3 px-4">Triage Priority & Score</th>
+                        <th class="py-3 px-4">Vitals & Symptoms</th>
+                        <th class="py-3 px-4">Department & Doctor</th>
+                        <th class="py-3 px-4">Est. Wait</th>
+                        <th class="py-3 px-4 text-right">Allocation Action</th>
+                    </tr>
+                </thead>
+                <tbody id="queue-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-400">Loading urgency queue...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal: Assign Doctor to Patient -->
+<div id="assign-doctor-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-base text-slate-800">Allocate Patient to Doctor</h3>
+            <button onclick="closeAssignModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+        </div>
+
+        <div class="text-xs space-y-3">
+            <div class="p-3 rounded-xl bg-sky-50 border border-sky-100">
+                <div class="font-bold text-sky-900" id="assign-patient-name">Patient</div>
+                <div class="text-slate-600 text-[11px]" id="assign-token-desc">Token: TKN-XXX</div>
+            </div>
+
+            <div>
+                <label class="block font-semibold text-slate-700 mb-1">Select Available Doctor</label>
+                <select id="assign-doctor-select" class="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+
+            <div class="pt-3 flex justify-end space-x-2">
+                <button type="button" onclick="closeAssignModal()" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 font-semibold">Cancel</button>
+                <button type="button" onclick="confirmDoctorAssignment()" class="px-5 py-2 rounded-lg bg-sky-600 text-white font-bold hover:bg-sky-500">Call to Room Now</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let rawQueue = [];
+    let assigningVisitId = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchQueue();
+        setInterval(fetchQueue, 5000);
+    });
+
+    async function fetchQueue() {
+        const deptId = document.getElementById('filter-dept').value;
+        let url = '/api/queue?status=ACTIVE';
+        if (deptId) url += `&department_id=${deptId}`;
+
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.success) {
+                rawQueue = data.queue;
+                filterQueueLocal();
+            }
+        } catch (err) {
+            console.error("Queue fetch error:", err);
+        }
+    }
+
+    function filterQueueLocal() {
+        const priorityFilter = document.getElementById('filter-priority').value;
+        let filtered = rawQueue;
+        if (priorityFilter !== 'ALL') {
+            filtered = rawQueue.filter(i => i.priority_level === priorityFilter);
+        }
+        renderQueue(filtered);
+    }
+
+    function renderQueue(items) {
+        const tbody = document.getElementById('queue-table-body');
+        if (!items || items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-slate-400">No active queue entries match this criteria.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        items.forEach((item, index) => {
+            let badge = '';
+            let rowClass = 'hover:bg-slate-50';
+
+            if (item.priority_level === 'CRITICAL') {
+                badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-100 text-red-700 border border-red-300 flex items-center space-x-1 w-max">
+                    <span class="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+                    <span>CRITICAL (P1)</span>
+                </span>`;
+                rowClass = 'bg-red-50/50 hover:bg-red-50';
+            } else if (item.priority_level === 'URGENT') {
+                badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 w-max">URGENT (P2)</span>`;
+                rowClass = 'hover:bg-amber-50/30';
+            } else {
+                badge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 w-max">ROUTINE (P3)</span>`;
+            }
+
+            let vitalsStr = '--';
+            if (item.vitals && item.vitals.spo2) {
+                vitalsStr = `SpO2: <strong class="${item.vitals.spo2 < 90 ? 'text-red-600 font-bold' : ''}">${item.vitals.spo2}%</strong> • HR: ${item.vitals.hr || '--'} • BP: ${item.vitals.systolic_bp || '--'}/${item.vitals.diastolic_bp || '--'}`;
+            }
+
+            let doctorAction = '';
+            if (item.status === 'IN_CONSULTATION') {
+                doctorAction = `<span class="px-2 py-1 rounded bg-sky-100 text-sky-800 font-bold text-[10px]"><i class="fa-solid fa-spinner fa-spin mr-1"></i> In Room ${item.assigned_room || ''}</span>`;
+            } else {
+                doctorAction = `<button onclick="openAssignDoctorModal(${item.id}, '${item.token_no}', '${item.patient_name}', ${item.department_id})"
+                                       class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[10px] transition">
+                                    Call / Allocate
+                                </button>`;
+            }
+
+            html += `
+            <tr class="${rowClass} transition border-b border-slate-100">
+                <td class="py-3.5 px-4 font-mono">
+                    <div class="font-extrabold text-sm text-slate-900">#${item.queue_position}</div>
+                    <div class="text-[11px] font-bold text-sky-600">${item.token_no}</div>
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-800 text-xs">${item.patient_name}</div>
+                    <div class="text-[11px] text-slate-400">${item.gender}, ${item.age} yrs • ${item.patient_code}</div>
+                </td>
+                <td class="py-3.5 px-4">
+                    ${badge}
+                    <div class="text-[10px] text-slate-500 mt-1 font-mono">Score: <strong>${item.priority_score}</strong>/100</div>
+                </td>
+                <td class="py-3.5 px-4 max-w-xs">
+                    <div class="truncate text-slate-700 text-xs" title="${item.chief_complaint}">${item.chief_complaint}</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5">${vitalsStr}</div>
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="font-semibold text-slate-800 text-[11px]">${item.dept_name}</div>
+                    <div class="text-[10px] text-slate-500">${item.assigned_doctor_name ? item.assigned_doctor_name + ' (Rm ' + item.assigned_room + ')' : 'Pending Doctor'}</div>
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-800 text-xs">${item.estimated_wait_mins === 0 ? '<span class="text-red-600 font-black">IMMEDIATE</span>' : '~' + item.estimated_wait_mins + ' min'}</div>
+                    <div class="text-[10px] text-slate-400">${item.status.replace('_', ' ')}</div>
+                </td>
+                <td class="py-3.5 px-4 text-right">
+                    ${doctorAction}
+                </td>
+            </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    async function openAssignDoctorModal(visitId, token, patientName, deptId) {
+        assigningVisitId = visitId;
+        document.getElementById('assign-patient-name').innerText = patientName;
+        document.getElementById('assign-token-desc').innerText = `Token: ${token}`;
+
+        // Fetch doctors
+        try {
+            const res = await fetch('/api/doctors');
+            const data = await res.json();
+            if (data.success) {
+                const select = document.getElementById('assign-doctor-select');
+                select.innerHTML = data.doctors.map(d => `
+                    <option value="${d.id}">
+                        ${d.name} (${d.dept_name} • Room ${d.room_no}) - [${d.status}]
+                    </option>
+                `).join('');
+            }
+        } catch (err) {
+            console.error("Doctor fetch error:", err);
+        }
+
+        document.getElementById('assign-doctor-modal').classList.remove('hidden');
+    }
+
+    function closeAssignModal() {
+        document.getElementById('assign-doctor-modal').classList.add('hidden');
+        assigningVisitId = null;
+    }
+
+    async function confirmDoctorAssignment() {
+        const doctorId = document.getElementById('assign-doctor-select').value;
+        if (!doctorId || !assigningVisitId) return;
+
+        try {
+            const res = await fetch('/api/doctors/call-next', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ doctor_id: doctorId, visit_id: assigningVisitId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                closeAssignModal();
+                fetchQueue();
+            } else {
+                alert(data.message || data.error);
+            }
+        } catch (err) {
+            alert("Allocation failed: " + err.message);
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Patient Triage & Queue Management{% endblock %} | ApexCare Health</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        critical: '#EF4444',
+                        urgent: '#F59E0B',
+                        routine: '#10B981',
+                        hospital: {
+                            50: '#F0F9FF',
+                            100: '#E0F2FE',
+                            500: '#0284C7',
+                            700: '#0369A1',
+                            900: '#0C4A6E'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome & Lucide Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-slate-900 text-white shadow-md border-b border-slate-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Brand & Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/30">
+                        <i class="fa-solid fa-heart-pulse text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-sky-300 via-white to-sky-100 bg-clip-text text-transparent">ApexCare Flow</span>
+                            <span class="text-[10px] font-semibold bg-sky-950 text-sky-400 border border-sky-700/60 rounded px-1.5 py-0.5">GEC 2026</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-tight">Urgency-Aware Patient Triage & Queue</p>
+                    </div>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="hidden md:flex items-center space-x-1">
+                    <a href="{{ url_for('dashboard_view') }}" class="px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center space-x-1.5 {% if request.path == '/' %}bg-slate-800 text-sky-400{% else %}text-slate-300{% endif %}">
+                        <i class="fa-solid fa-chart-pie text-xs"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="{{ url_for('triage_view') }}" class="px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center space-x-1.5 {% if request.path == '/triage' %}bg-slate-800 text-sky-400{% else %}text-slate-300{% endif %}">
+                        <i class="fa-solid fa-stethoscope text-xs"></i>
+                        <span>Triage Station</span>
+                    </a>
+                    <a href="{{ url_for('queue_view') }}" class="px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center space-x-1.5 {% if request.path == '/queue' %}bg-slate-800 text-sky-400{% else %}text-slate-300{% endif %}">
+                        <i class="fa-solid fa-list-ol text-xs"></i>
+                        <span>Live Queue</span>
+                    </a>
+                    <a href="{{ url_for('doctor_view') }}" class="px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center space-x-1.5 {% if request.path == '/doctor' %}bg-slate-800 text-sky-400{% else %}text-slate-300{% endif %}">
+                        <i class="fa-solid fa-user-doctor text-xs"></i>
+                        <span>Doctor Room</span>
+                    </a>
+                    <a href="{{ url_for('public_display_view') }}" target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium text-amber-300 hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-tv text-xs"></i>
+                        <span>TV Board</span>
+                    </a>
+                    <a href="{{ url_for('rules_view') }}" class="px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center space-x-1.5 {% if request.path == '/rules' %}bg-slate-800 text-sky-400{% else %}text-slate-300{% endif %}">
+                        <i class="fa-solid fa-sliders text-xs"></i>
+                        <span>Rules Engine</span>
+                    </a>
+                    <a href="{{ url_for('audit_view') }}" class="px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition flex items-center space-x-1.5 {% if request.path == '/audit' %}bg-slate-800 text-sky-400{% else %}text-slate-300{% endif %}">
+                        <i class="fa-solid fa-shield-halved text-xs"></i>
+                        <span>Audit & Events</span>
+                    </a>
+                </nav>
+
+                <!-- Role Switcher & Live SSE Connection Pill -->
+                <div class="flex items-center space-x-3">
+                    <!-- Real-time Live Sync Indicator -->
+                    <div id="sse-indicator" class="flex items-center space-x-1.5 px-2 py-1 rounded-full bg-slate-800 text-emerald-400 text-xs border border-slate-700">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="text-[11px] font-medium hidden sm:inline">LIVE SYNC</span>
+                    </div>
+
+                    <!-- Role Quick Switcher for Evaluators -->
+                    <div class="relative group">
+                        <button class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 transition">
+                            <span class="w-2 h-2 rounded-full {% if current_role == 'DOCTOR' %}bg-sky-400{% elif current_role == 'NURSE' %}bg-purple-400{% elif current_role == 'ADMIN' %}bg-amber-400{% else %}bg-slate-400{% endif %}"></span>
+                            <span class="font-semibold">{{ current_role }}:</span>
+                            <span class="truncate max-w-[100px]">{{ current_user }}</span>
+                            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+                        </button>
+                        <div class="absolute right-0 mt-1 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-xl py-1 hidden group-hover:block z-50">
+                            <div class="px-3 py-1.5 text-[11px] uppercase tracking-wider text-slate-400 font-bold border-b border-slate-800">Switch Role (RBAC)</div>
+                            <a href="{{ url_for('switch_role', role='NURSE') }}" class="flex items-center px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-purple-400">
+                                <i class="fa-solid fa-stethoscope w-5 text-purple-400"></i> Nurse (Triage Intake)
+                            </a>
+                            <a href="{{ url_for('switch_role', role='DOCTOR') }}" class="flex items-center px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-sky-400">
+                                <i class="fa-solid fa-user-doctor w-5 text-sky-400"></i> Doctor (Consultation)
+                            </a>
+                            <a href="{{ url_for('switch_role', role='ADMIN') }}" class="flex items-center px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-amber-400">
+                                <i class="fa-solid fa-shield-halved w-5 text-amber-400"></i> Administrator (Full)
+                            </a>
+                            <a href="{{ url_for('switch_role', role='KIOSK') }}" class="flex items-center px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 hover:text-emerald-400">
+                                <i class="fa-solid fa-id-card w-5 text-emerald-400"></i> Reception Kiosk
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Global Toast / Alert Banner Container -->
+    <div id="live-alert-container" class="fixed top-20 right-5 z-50 space-y-2 max-w-md w-full pointer-events-none"></div>
+
+    <!-- Main Content Body -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between">
+            <p><strong>GEC Hackathon 2026</strong> | Problem Statement 01: Healthcare – Patient Triage & Queue Management System</p>
+            <p class="mt-1 sm:mt-0 text-[11px] text-slate-400">Manchester Triage & ESI Algorithmic Decision Support • Synchronous Clinical Dispatch & Async Notifications</p>
+        </div>
+    </footer>
+
+    <!-- App JavaScript -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
