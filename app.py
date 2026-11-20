@@ -15,8 +15,8 @@ from triage_engine import ClinicalTriageEngine
 from event_bus import EventBus
 
 app = Flask(__name__)
-app.secret_key = 'gec_hackathon_2026_triage_secret_key_prod_grade'
-
+app.secret_key = os.environ.get("SECRET_KEY")
+# app.secret_key = 'gec_hackathon_2026_triage_secret_key_prod_grade'
 # Initialize database and event bus
 init_db()
 seed_initial_data()
